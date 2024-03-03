@@ -17,12 +17,34 @@
 #include <Wire.h>
 #include <VL53L0X.h>
 
+// sensores TOF VL53L0X
 VL53L0X sensor1;
 VL53L0X sensor2;
 VL53L0X sensor3;
 VL53L0X sensor4;
 VL53L0X sensor5;
 VL53L0X sensor6;
+
+// variable para el valor de distancia para cada sensor
+uint16_t value_sensor1;
+uint16_t value_sensor2;
+uint16_t value_sensor3;
+uint16_t value_sensor4;
+uint16_t value_sensor5;
+uint16_t value_sensor6;
+
+// variable para el manejo del tiempo
+unsigned long valorPrevio;
+unsigned long valorActual;
+unsigned long valorDiff;
+
+// variable para el mensaje de datos
+char data[80];
+
+// variable para la comunicacion i2c a un dispositivo esclavo.
+uint8_t size_datos;
+const int16_t I2C_SLAVE = 0x08;
+uint8_t num = 0;
 
 
 // Uncomment this line to use long range mode. This
@@ -39,13 +61,21 @@ VL53L0X sensor6;
 // - higher speed at the cost of lower accuracy OR
 // - higher accuracy at the cost of lower speed
 
-//#define HIGH_SPEED
-#define HIGH_ACCURACY
+#define HIGH_SPEED
+// #define HIGH_ACCURACY
 
-void medir_distancia_TOF(VL53L0X &sensor)
+uint16_t medir_distancia_TOF(VL53L0X &sensor)
 {
-  Serial.print(sensor.readRangeSingleMillimeters());
-  if (sensor.timeoutOccurred()) { Serial.print(" TIMEOUT"); }
+  if (sensor.timeoutOccurred()) 
+  { 
+    Serial.print(" TIMEOUT"); 
+    return 0;
+  }
+  else
+  {
+    return sensor.readRangeSingleMillimeters();
+  }
+  
 }
 
 void inicio_sensor_TOF(VL53L0X &sensor,uint8_t pin, uint8_t adress)
@@ -65,10 +95,13 @@ void inicio_sensor_TOF(VL53L0X &sensor,uint8_t pin, uint8_t adress)
 
 void setup()
 {
-  // inicio de perifericos
+  // tiempo
+  valorPrevio=millis();
 
+  // inicio de perifericos
   Serial.begin(115200);
   Wire.begin();
+  // Wire.setClock(400000);
 
   // inicio de los pines de Habilitadores, Total: 6 sensores 
   pinMode(8,OUTPUT);
@@ -124,19 +157,36 @@ void setup()
 
 void loop()
 {
+  // tiempo
+  valorActual=millis();
+  valorDiff = valorActual - valorPrevio; 
+  valorPrevio = valorActual;
+
   // medicion de todos los sensores.
-  medir_distancia_TOF(sensor1);
-  Serial.print(" ");
-  medir_distancia_TOF(sensor2);
-  Serial.print(" ");
-  medir_distancia_TOF(sensor3);
-  Serial.print(" ");
-  medir_distancia_TOF(sensor4);
-  Serial.print(" ");
-  medir_distancia_TOF(sensor5);
-  Serial.print(" ");
-  medir_distancia_TOF(sensor6);
-  
-  Serial.println();
+  value_sensor1 = medir_distancia_TOF(sensor1);
+  value_sensor2 = medir_distancia_TOF(sensor2);
+  value_sensor3 = medir_distancia_TOF(sensor3);
+  value_sensor4 = medir_distancia_TOF(sensor4);
+  value_sensor5 = medir_distancia_TOF(sensor5);
+  value_sensor6 = medir_distancia_TOF(sensor6);
+
+  sprintf(data,"%u %u %u %u %u %u",value_sensor1,value_sensor2,value_sensor3,value_sensor4,value_sensor5,value_sensor6);
+
+    // sprintf(data,"%u %u",value_sensor1,value_sensor2);
+
+  Serial.println(data);
+
+  size_datos = strlen(data); 
+
+  // enviar datos al periferico i2c
+  Wire.beginTransmission(I2C_SLAVE);
+  Wire.write(size_datos);
+  num = Wire.endTransmission();
+
+  Wire.beginTransmission(I2C_SLAVE);
+  Wire.write(data);
+  num = Wire.endTransmission();
+
+ 
 }
 
