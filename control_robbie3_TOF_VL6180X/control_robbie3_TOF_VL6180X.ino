@@ -12,6 +12,12 @@
   y con suficientes pines de habilitacion para los sensores pueda 
   controlar ,secuencialmente varios vl6180x para que el robot 
   robbie3 obtener un perpectiva del entorno.
+
+  1) deshabilita todos los sensores VL6180x
+  2) habilita y le asigna una nueva direcion i2c a cada sensor uno por uno.
+  3) raspberry pico W registra la distancia que le solicita acada sensor uno por uno.
+  4) cuando ya tiene las distacia de todos los sensores los envia al MCU STM32.
+  5) repite el ciclo desde el paso 3 hasta que se desconecte la alimentacion.
 */
 
 #include <Wire.h>
@@ -35,11 +41,6 @@ uint16_t value_sensor4;
 uint16_t value_sensor5;
 uint16_t value_sensor6;
 
-// variable para el manejo del tiempo
-unsigned long valorPrevio;
-unsigned long valorActual;
-unsigned long valorDiff;
-
 // variable para el mensaje de datos
 char data[80];
 
@@ -52,10 +53,7 @@ uint16_t medir_distancia_TOF(VL6180X &sensor)
 {
   if (sensor.timeoutOccurred()) 
   { 
-    Serial.print(" TIMEOUT ");
-    Serial.print(sensor.getAddress());
-    Serial.print(" ");
-    return 0;
+    return 0; // si no hay respuesta de sensor llamado se asigna el valor como cero.
   }
   else
   {
@@ -63,7 +61,7 @@ uint16_t medir_distancia_TOF(VL6180X &sensor)
   }
   
 }
-
+// funcion que habilita, configura por defecto el sensor y asigna una nueva direccion i2c.
 void inicio_sensor_TOF(VL6180X &sensor,uint8_t pin, uint8_t adress)
 {
   digitalWrite(pin,HIGH);
@@ -80,13 +78,10 @@ void inicio_sensor_TOF(VL6180X &sensor,uint8_t pin, uint8_t adress)
 
 void setup()
 {
-  // tiempo
-  valorPrevio=millis();
 
   // inicio de perifericos
   Serial.begin(115200);
   Wire.begin();
-//  Wire.setClock(400000);
 
   // inicio de los pines de Habilitadores, Total: 6 sensores 
   pinMode(6,OUTPUT);
@@ -115,33 +110,30 @@ void setup()
 
 void loop()
 {
-  // tiempo
-  valorActual=millis();
-  valorDiff = valorActual - valorPrevio; 
-  valorPrevio = valorActual;
-
-  // medicion de todos los sensores.
+  // medicion de  distancia de todos los sensores.
   value_sensor1 = medir_distancia_TOF(sensor1);
   value_sensor2 = medir_distancia_TOF(sensor2);
   value_sensor3 = medir_distancia_TOF(sensor3);
   value_sensor4 = medir_distancia_TOF(sensor4);
   value_sensor5 = medir_distancia_TOF(sensor5);
   value_sensor6 = medir_distancia_TOF(sensor6);
-
+  
+  // crea una cadena de caracteres con las variable de distancia de cada sensor.
   sprintf(data,"%u %u %u %u %u %u",value_sensor1,value_sensor2,value_sensor3,value_sensor4,value_sensor5,value_sensor6);
-
   Serial.println(data);
 
   size_datos = strlen(data); 
 
-  // enviar datos al periferico i2c
+  // enviar el numero de bits que tiene que leer el MCU STM32 para que reciba la proxima transmicion de datos. 
   Wire.beginTransmission(I2C_SLAVE);
   Wire.write(size_datos);
   num = Wire.endTransmission();
 
+  //  enviar la cadena de caracteres con las variable de distancia al MCU STM32.
   Wire.beginTransmission(I2C_SLAVE);
   Wire.write(data);
   num = Wire.endTransmission();
 
+  // formatea la variable data.
   memset(data, 0, sizeof(data));
 }
